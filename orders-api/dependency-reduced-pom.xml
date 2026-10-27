@@ -48,8 +48,10 @@
   </dependencies>
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
+    <aws-lambda-java-core.version>1.4.1</aws-lambda-java-core.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>5.10.2</junit.version>
-    <aws-lambda-java-core.version>1.4.1</aws-lambda-java-core.version>
+    <jackson.version>2.22.4</jackson.version>
+    <aws-lambda-java-events.version>3.15.0</aws-lambda-java-events.version>
   </properties>
 </project>

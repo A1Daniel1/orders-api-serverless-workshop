@@ -43,6 +43,7 @@ public class OrdersApiHandler implements RequestHandler<OrdersApiRequest, Object
             case "createOrder" -> createOrder(input);
             case "getOrder" -> getOrder(input);
             case "getOrdersByCustomer" -> getOrdersByCustomer(input);
+            case "deleteOrder" -> deleteOrder(input);
             default -> throw new ValidationException("unknown operation: " + operation);
         };
     }
@@ -59,6 +60,12 @@ public class OrdersApiHandler implements RequestHandler<OrdersApiRequest, Object
 
     private List<Order> getOrdersByCustomer(OrdersApiRequest input) {
         return service.getOrdersByCustomer(input.getCustomerId());
+    }
+
+    /** Successful deletion returns null: the DELETE integration response maps it to an empty 204 body. */
+    private Object deleteOrder(OrdersApiRequest input) {
+        service.deleteOrder(input.getId());
+        return null;
     }
 
     private void seedDemoOrders() {

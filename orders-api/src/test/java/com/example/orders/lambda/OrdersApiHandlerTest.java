@@ -2,6 +2,7 @@ package com.example.orders.lambda;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -137,7 +138,7 @@ class OrdersApiHandlerTest {
 
     @Test
     void unknownOperation_throwsValidationException() {
-        OrdersApiRequest req = req("deleteOrder");
+        OrdersApiRequest req = req("updateOrder");
 
         ValidationException ex = assertThrows(ValidationException.class,
                 () -> handler.handleRequest(req, null));
@@ -163,6 +164,29 @@ class OrdersApiHandlerTest {
         get.setId(created.getId());
 
         assertEquals(created, handler.handleRequest(get, null));
+    }
+
+    @Test
+    void deleteOrder_seededOrder_returnsNullForEmpty204AndOrderIsGone() {
+        OrdersApiRequest delete = req("deleteOrder");
+        delete.setId("ORD-001");
+
+        assertNull(handler.handleRequest(delete, null));
+        assertThrows(OrderNotFoundException.class, () -> handler.handleRequest(getOrder("ORD-001"), null));
+    }
+
+    @Test
+    void deleteOrder_unknownOrder_throwsOrderNotFoundException() {
+        OrdersApiRequest delete = req("deleteOrder");
+        delete.setId("ORD-999");
+
+        assertThrows(OrderNotFoundException.class, () -> handler.handleRequest(delete, null));
+    }
+
+    private static OrdersApiRequest getOrder(String id) {
+        OrdersApiRequest r = req("getOrder");
+        r.setId(id);
+        return r;
     }
 
     private static OrdersApiRequest req(String operation) {

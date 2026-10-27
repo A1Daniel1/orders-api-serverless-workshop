@@ -51,6 +51,15 @@ public class OrderService {
         return repository.findByCustomerId(customerId);
     }
 
+    public void deleteOrder(String id) {
+        if (id == null || id.isBlank()) {
+            throw new ValidationException("id must not be blank");
+        }
+        if (repository.delete(id) == null) {
+            throw new OrderNotFoundException("Order " + id + " does not exist");
+        }
+    }
+
     private void validateRequest(CreateOrderRequest request) {
         if (request == null) {
             throw new ValidationException("request must not be null");

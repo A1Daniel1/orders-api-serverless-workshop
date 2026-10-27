@@ -28,8 +28,18 @@ La *condición* (existe/no existe) la detecta el service lanzando o no `OrderNot
 - Repository: `delete` existente/inexistente.
 - Handler: `deleteOrder` despacha correctamente y propaga la not-found.
 
-## Comparación con la propuesta del agente (a completar después)
+## Comparación con la propuesta del agente
 
-- Coincidencias: (a completar)
-- Diferencias: (a completar)
-- Qué adopté finalmente y por qué: (a completar)
+**Nota honesta:** por tiempo de entrega, el prompt P-006 con esta predicción fue preparado pero **no llegó a enviarse al agente de código**; la implementación la realizó directamente el agente guía (Daniel la aprobó como predicción). La comparación "agente vs predicción" se convirtió en "implementación vs predicción":
+
+**Coincidencias (implementación = predicción):**
+- `OrderService.deleteOrder(String)` que lanza `OrderNotFoundException` si no existe ✔
+- `InMemoryOrderRepository.delete(String)` con semántica de `Map.remove` ✔
+- Nuevo caso `deleteOrder` en el switch del `OrdersApiHandler`, sin DTO nuevo ✔
+- Sin función Lambda nueva (misma función `Orders`, solo resubir JAR) ✔
+- 204 vs 404: la *condición* en el service (excepción), la *traducción HTTP* en API Gateway (default → 204 con template vacío, regex `.*OrderNotFoundException.*` → 404) ✔
+- Tests: servicio (existe/no existe), repositorio, handler (dispatch + not-found) ✔
+
+**Diferencias:** ninguna estructural. La única decisión fina fue qué devuelve el handler en el caso 204: `null` (el runtime serializa como payload vacío y el Integration Response del DELETE lo mapea a body vacío), tal como se especificó en el prompt.
+
+**Qué se implementó finalmente y por qué:** exactamente la predicción — el ejercicio de predicción sirvió para confirmar que la extensión no rompía la arquitectura: el cambio quedó contenido en las capas correctas (repository + service + una línea de dispatch), sin tocar modelos ni excepciones.

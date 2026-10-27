@@ -1,0 +1,24 @@
+{
+  "resource": "/orders/{id}",
+  "path": "/orders/ORD-001",
+  "httpMethod": "GET",
+  "headers": {
+    "Accept": "*/*",
+    "Content-Type": "application/json",
+    "Host": "kakau23ljl.execute-api.us-east-1.amazonaws.com",
+    "User-Agent": "curl/8.5.0"
+  },
+  "queryStringParameters": null,
+  "pathParameters": {
+    "id": "ORD-001"
+  },
+  "requestContext": {
+    "resourcePath": "/orders/{id}",
+    "httpMethod": "GET",
+    "requestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "stage": "dev",
+    "apiId": "kakau23ljl"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

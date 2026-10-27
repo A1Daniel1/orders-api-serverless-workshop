@@ -30,4 +30,9 @@ public class InMemoryOrderRepository {
                 .filter(order -> order.getCustomerId().equals(customerId))
                 .toList();
     }
+
+    /** Removes the order with the given id, returning the removed order, or null if absent. */
+    public Order delete(String id) {
+        return store.remove(id);
+    }
 }

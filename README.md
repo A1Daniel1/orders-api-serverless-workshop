@@ -133,12 +133,12 @@ orders-api/src/main/java/com/example/orders/
 - **InMemoryOrderRepository** — in-memory persistence; preserves insertion order so search results are deterministic. Not durable: Lambda execution environments are ephemeral.
 - **Exceptions** — plain Java `RuntimeException`s carrying only a human-readable message. The mapping from these exceptions to HTTP status codes (`400`/`404`) deliberately lives nowhere yet; it will be introduced by a later HTTP adapter so the core stays infrastructure-free.
 
-**Tests (JUnit 5):** 20 tests covering creation of a valid order, retrieval of an existing order, behavior when an order does not exist, searching by customer (including the empty case), and invalid input (null/blank/malformed fields, zero and negative quantity).
+**Tests (JUnit 5):** 50 tests in total — service and repository logic (20), the non-proxy dispatcher (15), the proxy HTTP adapter (11), and repository/service edge cases added by the DELETE extension — covering creation of a valid order, retrieval of an existing order, behavior when an order does not exist, searching by customer (including the empty case), deletion, and invalid input (null/blank/malformed fields, zero and negative quantity).
 
 ### Checkpoint 1
 
 - **Can the application functionality be tested without AWS?**
-  Yes. The service layer is plain Java over an in-memory repository; `mvn test` runs 20 JUnit tests without any AWS dependency.
+  Yes. The service layer is plain Java over an in-memory repository; `mvn test` runs 50 JUnit tests without any AWS dependency.
 
 - **Does the application require a web server?**
   No. Operations are plain method calls; nothing listens on a port.
@@ -228,9 +228,78 @@ Routing (resource/method tree); extracting path parameters (`id`) and query para
 - Dynamic response headers (e.g. `Location`) derived from the response body are not practically achievable.
 - Velocity Template Language is an additional, legacy-flavored syntax the team must maintain.
 
+## Part V — Lambda proxy integration (Architecture B)
+
+An alternative architecture exposes the same API with **Lambda proxy integration**: API Gateway forwards the *complete* HTTP request to Lambda as-is, and a thin **HTTP adapter** inside the Lambda produces the full HTTP response. Implemented in `OrdersProxyHandler`, deployed as a second function (`orders-proxy`) reusing the same fat JAR, so Architecture A keeps working untouched.
+
+The adapter uses the AWS-provided event types (`aws-lambda-java-events`): `RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>`. An example of the proxy event that API Gateway sends is stored in `evidence/aws/proxy-event-example.json`. Where each piece of the HTTP request appears in the event:
+
+| Information | Field in the proxy event |
+|---|---|
+| HTTP method | `httpMethod` |
+| Path | `path` (and `resource` for the configured route) |
+| Path parameters | `pathParameters` → `{"id": "ORD-001"}` |
+| Query parameters | `queryStringParameters` → `{"customerId": "CUST-42"}` |
+| Headers | `headers` |
+| Request body | `body` (a JSON **string**; `null` when there is no body) |
+
+The adapter routes by method + path, calls the same `OrderService` as Architecture A, and serializes the HTTP response itself:
+
+- success → status codes 200 / 201 / 204 set **in Java**, in one place;
+- `ValidationException` → 400 `INVALID_INPUT`, `OrderNotFoundException` → 404 `ORDER_NOT_FOUND`, unexpected exceptions → 500 `INTERNAL_ERROR` — all caught in one try/catch;
+- a **`Location` header** is set on 201 Created (`/orders/{id}`) — trivial here because the adapter owns the full response, unlike Architecture A where it is practically impossible.
+
+The application logic (`OrderService`) is unchanged in both architectures: it still deals only with orders, customers, products and quantities — never with HTTP.
+
+## Comparison of the Two Architectures (Section 14)
+
+| Question | A — API Gateway transformation (non-proxy) | B — Proxy + HTTP adapter |
+|---|---|---|
+| More API Gateway configuration? | **A.** 3 mapping templates + 4 integration-response rules per method; all in the console, not in version control. | B needs almost none: proxy on + Lambda target. |
+| More Java infrastructure code? | A: almost none. | **B.** The adapter (~150 lines): routing, parsing, response building. |
+| Easier to test locally? | **B.** The adapter is a plain class testable with event POJOs (11 unit tests). Architecture A's templates can only be verified against the deployed API (we found this the hard way: templates misplaced and a missing redeploy produced confusing failures). | |
+| Where are status codes defined? | A: in API Gateway Integration Response mappings (console). | B: in the adapter's Java code (versioned, reviewable). |
+| API grows from 3 to 30 operations? | A scales badly: 30 methods × (template + response mappings), each a manual console step with cross-method mistakes possible — we hit exactly that with 3 methods. | B scales in code: the routing block grows, but every change is a code review, not a console operation. |
+| Cleaner Java business logic? | **A.** The core knows zero HTTP; API Gateway does everything. | B is nearly as clean: the core is untouched; HTTP lives confined in the adapter. |
+| Easier for another developer? | **B.** Everything is in the repository: code + tests + (optionally) infra-as-code. Architecture A requires console archaeology to understand the API. | |
+| Choice for a larger system? | **B (proxy)** — testable, versionable, and the standard practice in the industry (serverless frameworks like SAM/CDK/Terraform assume it). Architecture A remains attractive when you want the HTTP layer managed by a platform team without touching application code, or for small APIs with stable contracts. | |
+
+## Final Architecture (Section 19)
+
+```mermaid
+flowchart TD
+    C["Client<br/>(curl / Postman)"] -- "HTTP request" --> AG
+    subgraph AWS["AWS (cloud)"]
+        AG["API Gateway REST API<br/>orders-api (stage dev)"]
+        AG -- "Architecture A: mapping template<br/>{operation, id / customerId / body}" --> L1["Lambda: Orders<br/>OrdersApiHandler (dispatcher)"]
+        AG -- "Architecture B: proxy event<br/>(full HTTP request)" --> L2["Lambda: orders-proxy<br/>OrdersProxyHandler (HTTP adapter)"]
+        L1 -- "JSON (runtime-serialized)" --> SVC
+        L2 -- "Java method calls" --> SVC
+    end
+    SVC["Application logic (plain Java)<br/>OrderService · Order · CreateOrderRequest ·<br/>InMemoryOrderRepository · domain exceptions"]
+
+    style SVC fill:#e8f5e9
+    style AG fill:#fff3e0
+    style L1 fill:#e3f2fd
+    style L2 fill:#e3f2fd
+```
+
+Dependencies: **API Gateway and the Lambda runtime are AWS-managed**. `OrdersApiHandler` and `OrdersProxyHandler` depend on AWS types (the only two classes that import AWS). Everything below the handlers — `OrderService`, models, repository, exceptions — is ordinary Java and knows nothing about HTTP or AWS.
+
+## Demonstration (Section 21)
+
+(Video placeholder — recording pending.)
+
+The video shows: `mvn test`, `mvn package`, a manual Lambda invocation, and the deployed API answering 200, 201, 400, 404 and the DELETE 204/404 extension, plus the final architecture diagram.
+
 ## Build and Test
 
 ```bash
-mvn test     # run unit tests (20 tests, all passing)
-mvn package  # package the application (thin JAR: target/orders-api-1.0.0.jar)
+mvn test     # run unit tests (50 tests, all passing)
+mvn package  # package the application (fat JAR: target/orders-api-1.0.0.jar)
+```
+
+Handler strings:
+- Architecture A (non-proxy dispatcher): `com.example.orders.lambda.OrdersApiHandler::handleRequest`
+- Architecture B (proxy): `com.example.orders.lambda.OrdersProxyHandler::handleRequest` — deployed as a second function (`orders-proxy`) reusing the same JAR.
 ```

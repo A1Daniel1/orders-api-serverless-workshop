@@ -131,6 +131,20 @@ class OrderServiceTest {
         assertThrows(ValidationException.class, () -> service.getOrdersByCustomer(" "));
     }
 
+    @Test
+    void deleteOrder_existingOrder_removesIt() {
+        service.createOrder(request("CUST-42", "MacBook Air", 1));
+
+        service.deleteOrder("ORD-001");
+
+        assertThrows(OrderNotFoundException.class, () -> service.getOrder("ORD-001"));
+    }
+
+    @Test
+    void deleteOrder_unknownOrder_throwsOrderNotFoundException() {
+        assertThrows(OrderNotFoundException.class, () -> service.deleteOrder("ORD-999"));
+    }
+
     private static CreateOrderRequest request(String customerId, String product, int quantity) {
         return new CreateOrderRequest(customerId, product, quantity);
     }

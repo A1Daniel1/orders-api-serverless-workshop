@@ -1,6 +1,7 @@
 package com.example.orders.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.orders.model.Order;
@@ -46,5 +47,19 @@ class InMemoryOrderRepositoryTest {
     @Test
     void findByCustomerId_noMatches_returnsEmptyList() {
         assertTrue(repository.findByCustomerId("CUST-42").isEmpty());
+    }
+
+    @Test
+    void delete_existingId_returnsAndRemovesTheOrder() {
+        Order order = new Order("ORD-001", "CUST-42", "MacBook Air", 1);
+        repository.save(order);
+
+        assertEquals(order, repository.delete("ORD-001"));
+        assertEquals(Optional.empty(), repository.findById("ORD-001"));
+    }
+
+    @Test
+    void delete_unknownId_returnsNull() {
+        assertNull(repository.delete("ORD-999"));
     }
 }
