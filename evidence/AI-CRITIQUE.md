@@ -70,10 +70,27 @@ Selected non-trivial decisions made by the coding agent during Part I, evaluated
 - **What was finally implemented and why:**
   Kept, since the workshop explicitly allows non-persistent in-memory data and predefined information. The ephemeral caveat is documented here and in the README.
 
+## Decision 5 — `aws-lambda-java-core` marked as scope `provided`, excluded from the fat JAR
+
+- **Decision made by the agent:**
+  The Lambda dependency was added with `<scope>provided</scope>`, so the shade plugin excluded it from the deployed JAR — and the agent's report even presented this as "correctly excluded".
+
+- **Why do I think it proposed this?**
+  The agent applied a habit from servlet/Web development, where the server *does* provide the API at runtime (e.g. `javax.servlet` in Tomcat). It mapped that pattern onto Lambda without checking whether the Lambda Java runtime actually provides these classes.
+
+- **Do you agree?**
+  No. This one was wrong, not just debatable: the AWS Lambda Java runtime does **not** provide `aws-lambda-java-core`. Deploying that JAR would fail on the first invocation with `NoClassDefFoundError` when the runtime tried to load a handler implementing `RequestStreamHandler`.
+
+- **Alternative that could have been used:**
+  Default scope (`compile`), so the small (~150 KB) library is bundled in the fat JAR. Or, if a "provided-style" assumption was made, it should have been verified against AWS documentation and against the actual JAR contents — the verification I ran (`unzip -l`) showed zero `com/amazonaws` entries.
+
+- **What was finally implemented and why:**
+  Correction requested (P-003): bundle the library in the JAR. Lesson recorded: verify the agent's claims with direct inspection — the agent inspected the JAR itself and still called the exclusion "correct".
+
 ## General reflection
 
 - **Did the agent think about architecture or just about compiling code?**
-  It thought about architecture more than average: it separated model/service/repository/exceptions, kept AWS out, and its Javadoc explains *why* (e.g. exceptions note that HTTP mapping is a later adapter concern). However, it anticipated AWS requirements (mutable POJO for Jackson) before they were needed — thinking ahead, but that ahead-thinking is itself a subtle coupling.
+  It thought about architecture more than average: it separated model/service/repository/exceptions, kept AWS out, and its Javadoc explains *why* (e.g. exceptions note that HTTP mapping is a later adapter concern). However, it anticipated AWS requirements (mutable POJO for Jackson) before they were needed — thinking ahead, but that ahead-thinking is itself a subtle coupling. In Part II it produced code that compiled and passed tests, yet carried a real deployment-breaking assumption ("provided" scope) presented as verified-correct — compiling green is not the same as working on the platform.
 
 - **Did it force me to think before implementing?**
   Yes — the prompt asked for architecture proposal first, and the class layout was reviewed before accepting code.
