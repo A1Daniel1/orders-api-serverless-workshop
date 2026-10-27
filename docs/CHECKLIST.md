@@ -11,13 +11,13 @@
 - [x] Responder preguntas en README.md
 
 ## 2. Parte I - Java puro (Secciones 5-6)
-- [ ] Crear proyecto Maven Java 17 (orders-api)
-- [ ] Modelos (Order, CreateOrderRequest, etc.)
-- [ ] Lógica sin HTTP/API Gateway/Spring
-- [ ] Tests JUnit mínimos
-- [ ] `mvn test` OK
-- [ ] `mvn package` OK
-- [ ] Checkpoint 1 en README
+- [x] Crear proyecto Maven Java 17 (orders-api)
+- [x] Modelos (Order, CreateOrderRequest, etc.)
+- [x] Lógica sin HTTP/API Gateway/Spring
+- [x] Tests JUnit mínimos
+- [x] `mvn test` OK (20/20)
+- [x] `mvn package` OK (thin JAR 8.5 KB)
+- [x] Checkpoint 1 en README
 
 ## 3. Parte II - Lambda (Sección 7)
 - [ ] Desplegar una operación en AWS Lambda

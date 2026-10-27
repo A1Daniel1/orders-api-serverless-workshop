@@ -1,0 +1,5 @@
+orders-api/target/
+*.class
+.idea/
+.vscode/
+.DS_Store

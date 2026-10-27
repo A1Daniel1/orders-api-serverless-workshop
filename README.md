@@ -108,11 +108,53 @@ The HTTP status code already carries the outcome of the request, so it is not re
 6. **What information should an error response contain?**
    A stable machine-readable error code and a human-readable message. The HTTP status code conveys the outcome; the body explains it.
 
+## Implementation (Part I — Plain Java)
+
+The application logic is implemented as ordinary Java 17 with no HTTP, API Gateway, Spring or web-server dependencies.
+
+```
+orders-api/src/main/java/com/example/orders/
+├── model/
+│   ├── Order.java                   Immutable value object (id, customerId, product, quantity)
+│   └── CreateOrderRequest.java      Raw input for creation; carries no validation logic
+├── service/
+│   └── OrderService.java            Validation, id generation and business operations
+├── repository/
+│   └── InMemoryOrderRepository.java In-memory storage backed by a LinkedHashMap
+└── exception/
+    ├── ValidationException.java     Invalid input
+    └── OrderNotFoundException.java  Referenced order does not exist
+```
+
+**Where each responsibility lives:**
+
+- **Model** — plain data; no validation, no infrastructure concerns.
+- **OrderService** — application logic: validates input (customerId format `CUST-<digits>`, non-empty product, quantity >= 1), generates sequential ids (`ORD-001`, ...), and delegates storage to the repository.
+- **InMemoryOrderRepository** — in-memory persistence; preserves insertion order so search results are deterministic. Not durable: Lambda execution environments are ephemeral.
+- **Exceptions** — plain Java `RuntimeException`s carrying only a human-readable message. The mapping from these exceptions to HTTP status codes (`400`/`404`) deliberately lives nowhere yet; it will be introduced by a later HTTP adapter so the core stays infrastructure-free.
+
+**Tests (JUnit 5):** 20 tests covering creation of a valid order, retrieval of an existing order, behavior when an order does not exist, searching by customer (including the empty case), and invalid input (null/blank/malformed fields, zero and negative quantity).
+
+### Checkpoint 1
+
+- **Can the application functionality be tested without AWS?**
+  Yes. The service layer is plain Java over an in-memory repository; `mvn test` runs 20 JUnit tests without any AWS dependency.
+
+- **Does the application require a web server?**
+  No. Operations are plain method calls; nothing listens on a port.
+
+- **Does it require Spring Boot?**
+  No. The only dependency is JUnit, and only at test scope.
+
+- **What does the generated JAR contain?**
+  Only the compiled application classes (a "thin" JAR, ~8.5 KB). It does not bundle any dependencies. When deploying to Lambda in Part II, a shaded (fat) JAR including the AWS SDK libraries will be required.
+
+- **Which parts of the application currently know about HTTP?**
+  None. Validation and not-found failures are thrown as generic Java exceptions; choosing the HTTP status code for each will be the job of a future adapter.
+
 ## Build and Test
 
 ```bash
-mvn test     # run unit tests
-mvn package  # package the application
+mvn test     # run unit tests (20 tests, all passing)
+mvn package  # package the application (thin JAR: target/orders-api-1.0.0.jar)
 ```
-
-(Instructions will be completed as the implementation progresses.)
