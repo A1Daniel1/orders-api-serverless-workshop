@@ -184,6 +184,50 @@ flowchart TD
 
 Observed with the deployed function: input `{"customerId":"CUST-42","product":"MacBook Air","quantity":1}` → output `{"id":"ORD-001",...}` on the first invocation; a second valid invocation on the same warm container returned `ORD-002` with ~0s execution time, confirming handler reuse; an invalid input produced a raw `ValidationException` error payload with no HTTP semantics.
 
+## Part III/IV — Exposing the API through API Gateway (non-proxy)
+
+A **REST API** (`orders-api`, stage `dev`) exposes the three operations through **non-proxy integrations** pointing to the single `Orders` function. API Gateway mapping templates transform each HTTP request into the JSON payload the dispatcher expects, injecting the `operation` field (DEC-001):
+
+| Method | Mapping template (application/json) |
+|---|---|
+| `GET /orders/{id}` | `{ "operation": "getOrder", "id": "$input.params('id')" }` |
+| `GET /orders` | `{ "operation": "getOrdersByCustomer", "customerId": "$input.params('customerId')" }` |
+| `POST /orders` | `{ "operation": "createOrder", "customerId": $input.json('$.customerId'), "product": $input.json('$.product'), "quantity": $input.json('$.quantity') }` |
+
+The Java application never sees HTTP: it receives a small JSON document whose shape was designed by the mapping template.
+
+### HTTP semantics (status codes)
+
+With non-proxy integration, status codes are chosen by API Gateway **Integration Response** rules, matched by regex against the Lambda response body:
+
+| Lambda outcome | Integration response | Status | Body |
+|---|---|---|---|
+| Return value (success) | default mapping (POST → 201, GET → 200) | 200 / 201 | passthrough of the returned object |
+| `ValidationException` | regex `.*ValidationException.*` | 400 | `{ "error": "INVALID_INPUT", "message": ... }` |
+| `OrderNotFoundException` | regex `.*OrderNotFoundException.*` | 404 | `{ "error": "ORDER_NOT_FOUND", "message": ... }` |
+| Any other exception | catch-all regex `.*Exception.*` (listed last) | 500 | `{ "error": "INTERNAL_ERROR", "message": "Unexpected error. See server logs." }` |
+
+This hides the raw Lambda error payload (`errorMessage`/`errorType`/`stackTrace`) from clients and turns Java exceptions into proper HTTP responses.
+
+**A notable limitation discovered here:** a `Location` header on `201 Created` is impractical in this architecture — API Gateway header mappings can only derive headers from integration *headers*, not from the response *body*, where the generated id lives. This is a concrete disadvantage of Architecture A that the proxy architecture (Part V) does not have.
+
+### Checkpoint 3 — what is API Gateway responsible for in this architecture?
+
+Routing (resource/method tree); extracting path parameters (`id`) and query parameters (`customerId`); transforming requests (mapping templates → dispatcher payload); **dispatching by injecting the `operation` field** (in this design, API Gateway decides which business operation is invoked); transforming responses (regex-based error mapping); choosing status codes (201 vs 200, 400/404/500 from exception types); hiding internal error details (stack traces never reach the client).
+
+**Advantages of this distribution:**
+- The Java application stays domain-pure: no HTTP, no AWS event shapes, no status codes in code.
+- HTTP semantics live in one place (API Gateway configuration), decoupled from business logic.
+- Small JAR; no HTTP or event-format dependencies in the application.
+- Clients get consistent error documents even though Lambda has no concept of HTTP.
+
+**Disadvantages:**
+- Configuration-heavy and error-prone: templates live in the console, not in version control; a misplaced template produces confusing cross-operation bugs (during the workshop, `GET /orders/{id}` briefly dispatched `createOrder` because it carried the POST template, and missing templates produced `unknown operation: null`).
+- Changes require redeployment to take effect — easy to forget, hard to diagnose from the client side (we observed `HTTP 200` with error payloads before configuring response mappings).
+- The HTTP behavior of the API is spread across three mapping templates + four integration responses per concern — harder to review, diff, or transfer to another team member than code.
+- Dynamic response headers (e.g. `Location`) derived from the response body are not practically achievable.
+- Velocity Template Language is an additional, legacy-flavored syntax the team must maintain.
+
 ## Build and Test
 
 ```bash
