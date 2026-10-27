@@ -152,6 +152,38 @@ orders-api/src/main/java/com/example/orders/
 - **Which parts of the application currently know about HTTP?**
   None. Validation and not-found failures are thrown as generic Java exceptions; choosing the HTTP status code for each will be the job of a future adapter.
 
+## Part II — Deploying to AWS Lambda
+
+The `createOrder` operation was deployed as the `Orders` function (Java 17, region `us-east-1`):
+
+- **Handler:** `com.example.orders.lambda.CreateOrderHandler::handleRequest`
+- `CreateOrderHandler` is a typed `RequestHandler<CreateOrderRequest, Order>` and is the **only class in the project importing AWS types**.
+- The deployed artifact is a fat JAR (maven-shade-plugin) bundling `aws-lambda-java-core`. It does **not** bundle Jackson: JSON conversion is performed by the Lambda runtime itself.
+
+### Investigation: how does the Lambda Java runtime map JSON to Java?
+
+Deployed behavior (verified against the running function, see `evidence/aws/lambda-parte2.md` and `evidence/screenshots/`):
+
+1. **Instantiation.** The runtime instantiates the handler class once per *execution environment* using its no-arg constructor, and reuses that object across invocations (warm start). This is why `OrderService` (and its in-memory repository + id counter) is created in the constructor.
+2. **JSON → Java.** For a typed `RequestHandler<I, R>`, the runtime uses its **built-in serializer** (an internal Jackson `ObjectMapper` owned by the runtime, not by the application) to deserialize the event JSON into the declared input type, `CreateOrderRequest`.
+3. **Java → JSON.** The returned `Order` object is serialized back to JSON by the same runtime serializer. Our fat JAR contains zero Jackson classes, yet the mapping still happened — the conversion is entirely runtime-owned.
+4. **POJO shape matters.** The runtime's serializer requires the input type to have a no-arg constructor and setters (`CreateOrderRequest`), and reads the output type through its getters (`Order`). This is why the mutable `CreateOrderRequest` decision made in Part I paid off here.
+5. **Errors are not HTTP.** An input that fails validation propagated as a raw function error: `errorType: ValidationException`, `errorMessage: "product must not be blank"` plus a stack trace. The invocation is simply "failed"; no HTTP status exists at this layer. Translating domain exceptions into HTTP codes (`400`, `404`) is the job of a later HTTP-facing layer (API Gateway or an adapter).
+
+### Checkpoint 2
+
+```mermaid
+flowchart TD
+    A["JSON event<br/>{customerId, product, quantity}"] --> B["AWS Lambda Runtime<br/>(built-in serializer)"]
+    B -- "deserialize" --> C["CreateOrderRequest<br/>(Java object)"]
+    C --> D["CreateOrderHandler<br/>(only AWS-aware class)"]
+    D --> E["OrderService.createOrder()<br/>validate + generate id"]
+    E --> F["Order<br/>(Java object)"]
+    F -- "serialize" --> G["JSON response<br/>{id, customerId, product, quantity}"]
+```
+
+Observed with the deployed function: input `{"customerId":"CUST-42","product":"MacBook Air","quantity":1}` → output `{"id":"ORD-001",...}` on the first invocation; a second valid invocation on the same warm container returned `ORD-002` with ~0s execution time, confirming handler reuse; an invalid input produced a raw `ValidationException` error payload with no HTTP semantics.
+
 ## Build and Test
 
 ```bash

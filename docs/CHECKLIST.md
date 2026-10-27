@@ -20,11 +20,11 @@
 - [x] Checkpoint 1 en README
 
 ## 3. Parte II - Lambda (Sección 7)
-- [ ] Desplegar una operación en AWS Lambda
-- [ ] Probar con JSON manual
-- [ ] Investigar mapeo JSON <-> Java
-- [ ] Diagrama flujo JSON->Lambda->Java
-- [ ] Checkpoint 2
+- [x] Desplegar una operación en AWS Lambda (función `Orders`, us-east-1)
+- [x] Probar con JSON manual (3 experimentos: válido, inválido, warm start)
+- [x] Investigar mapeo JSON <-> Java
+- [x] Diagrama flujo JSON->Lambda->Java
+- [x] Checkpoint 2
 
 ## 4. Parte III-IV - API Gateway con transformación (Secciones 8-10)
 - [ ] GET /orders/{id}
