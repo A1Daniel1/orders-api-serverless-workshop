@@ -6,9 +6,9 @@
 - [ ] Estructura creada
 
 ## 1. Diseño de API (Sección 4)
-- [ ] Definir contrato por operación (método, URL, params, body, respuestas, errores)
-- [ ] Definir formato JSON de error
-- [ ] Responder preguntas en README.md
+- [x] Definir contrato por operación (método, URL, params, body, respuestas, errores)
+- [x] Definir formato JSON de error
+- [x] Responder preguntas en README.md
 
 ## 2. Parte I - Java puro (Secciones 5-6)
 - [ ] Crear proyecto Maven Java 17 (orders-api)
